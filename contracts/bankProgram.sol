@@ -1,75 +1,118 @@
+
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.2 <0.9.0;
+pragma solidity >=0.7.0 <0.9.0;
 
+contract Crowdfunding {
 
-contract BankProgram {
-   
-
-    event Withdrawal(address indexed to, uint amount);
-    event Transfer(address indexed from, address indexed to, uint amount);
-    event Deposit(address indexed from, uint amount);
-    event NewAccount(address indexed account);  
-
-
-    struct Account {
-        uint balance;
-        string name;
-        string email;
-        bool exists;
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;  
     }
-    mapping(address => Account) public accounts;
 
 
-    // create an account
-    function create_account(string memory name, string memory email) public payable{  
+    // events
+    event CampaignCreated(address indexed creator, uint256 indexed campaignId, uint256 targetAmount, uint256 deadline);
+    event Donated(address indexed donor, uint256 indexed campaignId, uint256 amount);
+    event CampaignEnded(uint256 indexed campaignId);
 
-       require(!accounts[msg.sender].exists, "Account already exists");
-       require(msg.value >= 0, "Insufficient funds to create account");
-      
+    // struct for a campaign
+    struct Campaign {
+        uint id;
+        string title;
+        string description;
+        address benefactor;
+        uint256 goal;
+        uint256 deadline;
+        uint256 amountRaised;
+        bool ended;
+    }
+    mapping(uint => Campaign) public campaigns;
+
+    address public owner;
+
+    uint256 public nextCampaignId;
+
+
+    // constructor that sets the owner
+    constructor() {
+        owner = msg.sender;
+    }
+
+    
+
+
+    // function that creates a campaign
+    function create_campaign(string memory _title, string memory _description, uint _goal, uint _deadline) public {
+        require(msg.sender != owner, "Owner cannot create a campaign");
+        require(campaigns[nextCampaignId].benefactor != msg.sender, "Cannot create more than one campaign");
+
+        Campaign memory newCampaign = Campaign({
+            id: nextCampaignId,
+            title: _title,
+            description: _description,
+            benefactor: msg.sender,
+            goal: _goal,
+            deadline: _deadline,
+            amountRaised: 0,
+            ended: true
+        });
+        campaigns[nextCampaignId] = newCampaign;
+        nextCampaignId++;     
+
+    }
+
+    // function that donates to a campaign
+    function donate_campaign(uint _id) public payable {
         
-        Account memory create = Account(
-            {
-                balance: 0,
-                name: name,
-                email: email,
-                exists: true
-            }
+        Campaign storage currentRequest = campaigns[_id];
+        require(
+            block.timestamp < currentRequest.deadline,
+            "Crowd Funding deadline has passed."
         );
-        accounts[msg.sender] = create;
-        deposit(msg.sender);
-        emit NewAccount(msg.sender);
+
+        require(currentRequest.benefactor == msg.sender, "Cannot donate to your own campaign");
+        require(currentRequest.id == _id, "Campaign does not exist");  
+        require(msg.value > 0, "Donation must be greater than 0");
+
+
+        currentRequest.amountRaised += msg.value;
+       
+
+        emit Donated(msg.sender, _id, msg.value);
 
     }
 
-    // deposit into account ether
-    function deposit(address _addre) public payable {
+    // function that ends a campaign
 
-        require(accounts[_addre].exists, "Account does not exist");
-        require(msg.value > 0, "Deposit amount must be greater than 0");
+    function end_campaign(uint _id) public payable onlyOwner {
+       
 
-        accounts[_addre].balance += msg.value;
-        emit Deposit(_addre, msg.value);
+        Campaign storage currentRequest = campaigns[_id];
+
+        require(
+            block.timestamp < currentRequest.deadline,
+            "Crowd Funding deadline has passed."
+        );
+
+        
+        (bool sent,) = currentRequest.benefactor.call{value: currentRequest.amountRaised}("");
+        require(sent, "Failed to send Ether");
+
+        currentRequest.amountRaised = 0;
+        currentRequest.ended = true;
+
+
+        emit CampaignEnded(_id);
     }
 
-    // transfer from account into another account that has been created
-    function transfer_from(address payable to) public payable {
-        require(accounts[msg.sender].exists, "Account does not exist");
-        require(accounts[to].exists, "Recipient account does not exist");
 
-        require(accounts[msg.sender].balance >= msg.value, "Insufficient funds to transfer");
+    // function that withdraws left over funds by only owner
+    // only owner can withdraw left overfunds
+    function withdraw() public payable onlyOwner {
+       uint256 balance = address(this).balance;
+       require(balance > 0, "No funds to withdraw");
 
-        deposit(to);
-        accounts[msg.sender].balance -= msg.value;
-
-        emit Transfer(msg.sender, to, msg.value);
-    }
-
-    // withdraw from bank into your wallet
-    function withdraw(uint amount) public payable {
-        require(accounts[msg.sender].exists, "Account does not exist");
-        require(accounts[msg.sender].balance >= amount, "Insufficient funds to withdraw");
-
-        (bool success,) = msg.sender.call{value: amount}("");
+        (bool success, ) = owner.call{value: balance}("");
         require(success, "Failed to send Ether");
     }
 }

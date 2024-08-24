@@ -1,8 +1,6 @@
-require("@nomiclabs/hardhat-waffle");
-require("dotenv").config();
-// require("@nomiclabs/hardhat-etherscan");
+require("@nomicfoundation/hardhat-toolbox");
 require("@nomicfoundation/hardhat-verify");
-require("@openzeppelin/hardhat-upgrades")
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
