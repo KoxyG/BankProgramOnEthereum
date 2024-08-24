@@ -46,13 +46,15 @@ contract Crowdfunding {
         require(msg.sender != owner, "Owner cannot create a campaign");
         require(campaigns[nextCampaignId].benefactor != msg.sender, "Cannot create more than one campaign");
 
+        uint _duration = block.timestamp + _deadline;
+
         Campaign memory newCampaign = Campaign({
             id: nextCampaignId,
             title: _title,
             description: _description,
             benefactor: msg.sender,
             goal: _goal,
-            deadline: _deadline,
+            deadline: _duration,
             amountRaised: 0,
             ended: true
         });
